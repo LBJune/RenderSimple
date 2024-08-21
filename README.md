@@ -14,7 +14,5 @@ Cmake搭建一个GLFW+GLAD的OpenGL渲染环境，支持Windows和Mac。运行�
 **MAC**
 ```
     cd /projectPath
-    mkdir xcode
-    cd xcode
-    cmake -G Xcode ..
+    cmake -B ./build -G Xcode
 ```
