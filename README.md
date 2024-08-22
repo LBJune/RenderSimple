@@ -1,18 +1,14 @@
 # RenderSimple
-Cmake搭建一个GLFW+GLAD的OpenGL渲染环境，支持Windows和Mac。运行结果是一个红色的窗口。
+关于着色器的一些使用方式。包括统一模式、分离模式、二进制Program、二进制shader的使用。
 
 ## 环境
-**Cmake ：** 3.25以上 
+**Cmake ：** 3.25以上  
+**OpenGL 4.6 或 OpenGLes 3.2**
 
 ## 使用
-**Windows**
 
+**Windows**
 ```    
     cd /projectPath
     cmake -B ./build
-```
-**MAC**
-```
-    cd /projectPath
-    cmake -B ./build -G Xcode
 ```
