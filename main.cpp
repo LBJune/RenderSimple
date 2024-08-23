@@ -198,6 +198,14 @@ GLuint CreateProgramPipelineByBinary()
 
 GLuint GenShaderByBinaryFile(std::string file_path, GLenum shaderType)
 {
+	//判断是否支持二进制文件
+	GLint numFormats = 0;
+	glGetIntegerv(GL_NUM_SHADER_BINARY_FORMATS, &numFormats);
+	if (numFormats == 0)
+	{
+		return -1;
+	}
+
 	GLuint shader = 0;
 	if (shaderType == GL_VERTEX_SHADER)
 	{
