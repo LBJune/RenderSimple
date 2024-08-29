@@ -38,6 +38,10 @@ static float vertices[] =
 	0.0f,  0.5f,  0.0f, 0.0f, 1.0f
 };
 
+static unsigned int indices[] = { // 注意索引从0开始！
+	0, 1, 2, // 第一组三角形
+};
+
 GLuint createProgram()
 {
 	//创建顶点着色器
@@ -77,18 +81,19 @@ GLuint createProgram()
 	return program;
 }
 
-GLuint CreateVAO()
+GLuint CreateVAO(GLuint &VBO, GLuint &IBO)
 {
 	//VAO操作
 	GLuint VAO;
 	glGenVertexArrays(1, &VAO);
-
-	GLuint VBO;
-	glGenBuffers(1, &VBO);
-
 	glBindVertexArray(VAO);
 
+	glGenBuffers(1, &IBO);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
 	//复制顶点数组到缓冲中供OpenGL使用
+	glGenBuffers(1, &VBO);
 	glBindBuffer(GL_ARRAY_BUFFER, VBO);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
@@ -102,6 +107,7 @@ GLuint CreateVAO()
 
 	glBindVertexArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
 	return VAO;
 }
@@ -133,14 +139,8 @@ int main()
 
 	GLuint program = createProgram();
 
-	GLuint vao = CreateVAO();
-
-	//render
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, vertices);//没有绑定buffer的情况下，最后的参数是数据指针地址，如果绑了buffer，则是buffer的偏移
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, &vertices[2]);
-	glEnableVertexAttribArray(1);
+	GLuint VBO, IBO;
+	GLuint VAO = CreateVAO(VBO, IBO);
 
 	// Main loop
 	while (!glfwWindowShouldClose(window)) {
@@ -150,17 +150,22 @@ int main()
 
 		glUseProgram(program);
 
+		////render
+		//glBindBuffer(GL_ARRAY_BUFFER, 0);
+		//glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, vertices);//没有绑定buffer的情况下，最后的参数是数据指针地址，如果绑了buffer，则是buffer的偏移
+		//glEnableVertexAttribArray(0);
+		//glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, &vertices[2]);
+		//glEnableVertexAttribArray(1);
 
-
-		glDrawArrays(GL_TRIANGLES, 0, 3);
-
-		/*glDisableVertexAttribArray(0);
-		glDisableVertexAttribArray(1);*/
-
-		////render with vao
-		//glBindVertexArray(vao);
 		//glDrawArrays(GL_TRIANGLES, 0, 3);
-		//glBindVertexArray(0);
+
+		//glDisableVertexAttribArray(0);
+		//glDisableVertexAttribArray(1);
+
+		//render with vao
+		glBindVertexArray(VAO);
+		glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, 0);
+		glBindVertexArray(0);
 
 		printf("===============glGetError:%d============================= \n", glGetError());
 
@@ -171,8 +176,10 @@ int main()
 		glfwPollEvents();
 	}
 
-	//glDeleteVertexArrays(1, &VAO);
-	//glDeleteBuffers(1, &VBO);
+
+	glDeleteVertexArrays(1, &VAO);
+	glDeleteBuffers(1, &VBO);
+	glDeleteBuffers(1, &IBO);
 	glDeleteProgram(program);
 
 	//Destroy window and resources
