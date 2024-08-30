@@ -3,47 +3,37 @@
 
 #include <iostream>
 
-// shader
-const char* vertexShaderSource = R"(
-#version 320 es
-
-in vec3 aColor;
-in vec2 aPosition;	
-
-out vec3 color;
-
-void main() {
-    gl_Position = vec4(aPosition, 0.0, 1.0);
-	color = aColor;
-}
-)";
-
-const char* fragmentShaderSource = R"(
-#version 320 es
-precision mediump float;
-
-in vec3 color;
-out vec4 FragColor;
-
-void main() {
-    FragColor = vec4(color, 1.0);
-}
-)";
-
-static float vertices[] =
-{
-	//---位置---//  //---颜色---//
-	-0.5f, -0.5f,  1.0f, 0.0f, 0.0f,
-	 0.5f, -0.5f,  0.0f, 1.0f, 0.0f,
-	0.0f,  0.5f,  0.0f, 0.0f, 1.0f
-};
-
-static unsigned int indices[] = { // 注意索引从0开始！
-	0, 1, 2, // 第一组三角形
-};
+static int windowsWidth = 800;
+static int windowsHeight = 600;
 
 GLuint createProgram()
 {
+	const char* vertexShaderSource = R"(
+		#version 320 es
+
+		in vec3 aColor;
+		in vec2 aPosition;    
+
+		out vec3 color;
+
+		void main() {
+			gl_Position = vec4(aPosition, 0.0, 1.0);
+			color = aColor;
+		}
+	)";
+
+	const char* fragmentShaderSource = R"(
+		#version 320 es
+		precision mediump float;
+
+		in vec3 color;
+		out vec4 FragColor;
+
+		void main() {
+			FragColor = vec4(color, 1.0);
+		}
+	)";
+
 	//创建顶点着色器
 	GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
@@ -65,12 +55,6 @@ GLuint createProgram()
 
 	glLinkProgram(program);
 
-	//获取Attribute属性的Location
-	GLint posotionLocation = glGetAttribLocation(program, "aPosition");
-	GLint colorLocation = glGetAttribLocation(program, "aColor");
-
-	printf("posotionLocation:%d, colorLocation:%d \n ", posotionLocation, colorLocation);
-
 	GLint max_vert_arrtibute_num = 0;
 	glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &max_vert_arrtibute_num);	//获取最大支持顶点属性个数
 	printf("max_vert_arrtibute:%d \n", max_vert_arrtibute_num);
@@ -81,35 +65,193 @@ GLuint createProgram()
 	return program;
 }
 
-GLuint CreateVAO(GLuint &VBO, GLuint &IBO)
+void DrawTriganle()
 {
-	//VAO操作
+	float vertices[] =
+	{
+		//---位置---//  //---颜色---//
+		-0.5f, -0.5f,  1.0f, 0.0f, 0.0f,
+		 0.5f, -0.5f,  0.0f, 1.0f, 0.0f,
+		0.0f,  0.5f,  0.0f, 0.0f, 1.0f
+	};
+
+	GLuint program = createProgram();
+
+	//获取Attribute属性的Location
+	GLint posotionLocation = glGetAttribLocation(program, "aPosition");
+	GLint colorLocation = glGetAttribLocation(program, "aColor");
+
+	printf("posotionLocation:%d, colorLocation:%d \n ", posotionLocation, colorLocation);
+
+	glUseProgram(program);
+
+	//没有绑定buffer的情况下，最后的参数是数据指针地址，如果绑了buffer，则是buffer的偏移
+	glVertexAttribPointer(posotionLocation, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, vertices);
+	glEnableVertexAttribArray(posotionLocation);
+
+	glVertexAttribPointer(colorLocation, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, &vertices[2]);
+	glEnableVertexAttribArray(colorLocation);
+
+	glDrawArrays(GL_TRIANGLES, 0, 3);
+
+	glDisableVertexAttribArray(posotionLocation);
+	glDisableVertexAttribArray(colorLocation);
+
+	glDeleteProgram(program);
+}
+
+void DrawTriganleVAO()
+{
+	float vertices[] =
+	{
+		//---位置---//  //---颜色---//
+		-0.5f, -0.5f,  1.0f, 0.0f, 0.0f,
+		 0.5f, -0.5f,  0.0f, 1.0f, 0.0f,
+		0.0f,  0.5f,  0.0f, 0.0f, 1.0f
+	};
+
+	GLuint program = createProgram();
+
+	//获取Attribute属性的Location
+	GLint posotionLocation = glGetAttribLocation(program, "aPosition");
+	GLint colorLocation = glGetAttribLocation(program, "aColor");
+
+	printf("posotionLocation:%d, colorLocation:%d \n ", posotionLocation, colorLocation);
+
 	GLuint VAO;
 	glGenVertexArrays(1, &VAO);
 	glBindVertexArray(VAO);
 
-	glGenBuffers(1, &IBO);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
-	//复制顶点数组到缓冲中供OpenGL使用
+	GLuint VBO;
 	glGenBuffers(1, &VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO);	//指定buffer为ARRAY_BUFFER,后面glVertexAttribPointer最后参数为偏移
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW); 	//复制顶点数组到buffer缓冲区，供OpenGL使用
 
-	//设置顶点posotionLocation属性指针
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)0);	//(void*)0指向的是buffer数据的偏移
-	glEnableVertexAttribArray(0);
+	//aPosition参数赋值
+	glVertexAttribPointer(posotionLocation, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)0);	//(void*)0指向的是buffer数据的偏移
+	glEnableVertexAttribArray(posotionLocation);
 
-	//设置顶点colorLocation属性指针
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)(2 * sizeof(float)));
-	glEnableVertexAttribArray(1);
+	//aColor参数赋值
+	glVertexAttribPointer(colorLocation, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)(2 * sizeof(float)));
+	glEnableVertexAttribArray(colorLocation);
 
 	glBindVertexArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-	return VAO;
+	glUseProgram(program);
+	glBindVertexArray(VAO);
+	glDrawArrays(GL_TRIANGLES, 0, 3);
+	glBindVertexArray(0);
+
+
+	glDisableVertexAttribArray(posotionLocation);
+	glDisableVertexAttribArray(colorLocation);
+
+	glDeleteVertexArrays(1, &VAO);
+	glDeleteBuffers(1, &VBO);
+	glDeleteProgram(program);
+}
+
+
+void DrawRectangle()
+{
+	float vertices[] =
+	{
+		//---位置---//  //---颜色---//
+		-0.5f, -0.5f,  1.0f, 0.0f, 0.0f,	//左下
+		 0.5f, -0.5f,  0.0f, 1.0f, 0.0f,	//右下
+		-0.5f,  0.5f,  0.0f, 0.0f, 1.0f,	//左上
+		 0.5f,  0.5f,  1.0f, 1.0f, 1.0f,	//右上
+	};
+
+	GLuint indices[] = {
+		0, 1, 2, // 第一个三角形
+		1, 3, 2  // 第二个三角形
+	};
+
+	GLuint program = createProgram();
+
+	//获取Attribute属性的Location
+	GLint posotionLocation = glGetAttribLocation(program, "aPosition");
+	GLint colorLocation = glGetAttribLocation(program, "aColor");
+
+	printf("posotionLocation:%d, colorLocation:%d \n ", posotionLocation, colorLocation);
+
+	glUseProgram(program);
+
+	//没有绑定buffer的情况下，最后的参数是数据指针地址，如果绑了buffer，则是buffer的偏移
+	glVertexAttribPointer(posotionLocation, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, vertices);
+	glEnableVertexAttribArray(posotionLocation);
+
+	glVertexAttribPointer(colorLocation, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, &vertices[2]);
+	glEnableVertexAttribArray(colorLocation);
+
+	glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(GLuint), GL_UNSIGNED_INT, indices);
+
+	glDisableVertexAttribArray(posotionLocation);
+	glDisableVertexAttribArray(colorLocation);
+
+	glDeleteProgram(program);
+}
+
+void DrawRectangleVBO()
+{
+	float vertices[] = {
+		//---位置---//  //---颜色---//
+		-0.5f, -0.5f,  1.0f, 0.0f, 0.0f,	//左下
+		 0.5f, -0.5f,  0.0f, 1.0f, 0.0f,	//右下
+		-0.5f,  0.5f,  0.0f, 0.0f, 1.0f,	//左上
+		 0.5f,  0.5f,  1.0f, 1.0f, 1.0f,	//右上
+	};
+
+	GLuint indices[] = {
+		0, 1, 2, // 第一个三角形
+		1, 3, 2  // 第二个三角形
+	};
+
+	GLuint program = createProgram();
+
+	//获取Attribute属性的Location
+	GLint posotionLocation = glGetAttribLocation(program, "aPosition");
+	GLint colorLocation = glGetAttribLocation(program, "aColor");
+
+	printf("posotionLocation:%d, colorLocation:%d \n ", posotionLocation, colorLocation);
+
+	GLuint VAO;
+	glGenVertexArrays(1, &VAO);
+	glBindVertexArray(VAO);
+
+	GLuint VBO;
+	glGenBuffers(1, &VBO);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO);	//指定buffer为ARRAY_BUFFER,后面glVertexAttribPointer最后参数为偏移
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW); 	//复制顶点数组到buffer缓冲区，供OpenGL使用
+
+	//posotionLocation属性指针
+	glVertexAttribPointer(posotionLocation, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)0);	//(void*)0指向的是buffer数据的偏移
+	glEnableVertexAttribArray(posotionLocation);
+
+	glVertexAttribPointer(colorLocation, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, (void*)(2 * sizeof(float)));
+	glEnableVertexAttribArray(colorLocation);
+
+	GLuint EBO;
+	glGenBuffers(1, &EBO);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);	//指定buffer为ELEMENT_ARRAY_BUFFER 索引数组
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW); 	//复制顶点数组到buffer缓冲区，供OpenGL使用
+
+	glBindVertexArray(0);
+
+	glUseProgram(program);
+	glBindVertexArray(VAO);
+	glDrawElements(GL_TRIANGLES, sizeof(indices) / sizeof(GLuint), GL_UNSIGNED_INT, 0);
+	glBindVertexArray(0);
+
+	glDisableVertexAttribArray(posotionLocation);
+	glDisableVertexAttribArray(colorLocation);
+
+	glDeleteVertexArrays(1, &VAO);
+	glDeleteBuffers(1, &VBO);
+	glDeleteBuffers(1, &EBO);
+
+	glDeleteProgram(program);
 }
 
 int main()
@@ -121,7 +263,7 @@ int main()
 	}
 
 	// Create a windowed mode window and its OpenGL context
-	GLFWwindow* window = glfwCreateWindow(800, 600, "RenderSimple Window", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(windowsWidth, windowsHeight, "RenderSimple Window", NULL, NULL);
 	if (!window) {
 		glfwTerminate();
 		return -1;
@@ -137,35 +279,16 @@ int main()
 		return -1;
 	}
 
-	GLuint program = createProgram();
-
-	GLuint VBO, IBO;
-	GLuint VAO = CreateVAO(VBO, IBO);
-
 	// Main loop
 	while (!glfwWindowShouldClose(window)) {
 
 		glClearColor(0.0, 0.0, 0.0, 1.0);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		glUseProgram(program);
-
-		////render
-		//glBindBuffer(GL_ARRAY_BUFFER, 0);
-		//glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, vertices);//没有绑定buffer的情况下，最后的参数是数据指针地址，如果绑了buffer，则是buffer的偏移
-		//glEnableVertexAttribArray(0);
-		//glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 5, &vertices[2]);
-		//glEnableVertexAttribArray(1);
-
-		//glDrawArrays(GL_TRIANGLES, 0, 3);
-
-		//glDisableVertexAttribArray(0);
-		//glDisableVertexAttribArray(1);
-
-		//render with vao
-		glBindVertexArray(VAO);
-		glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, 0);
-		glBindVertexArray(0);
+		//DrawTriganle();
+		//DrawTriganleVAO();
+		//DrawRectangle();
+		DrawRectangleVBO();
 
 		printf("===============glGetError:%d============================= \n", glGetError());
 
@@ -175,12 +298,6 @@ int main()
 		// Poll for and process events
 		glfwPollEvents();
 	}
-
-
-	glDeleteVertexArrays(1, &VAO);
-	glDeleteBuffers(1, &VBO);
-	glDeleteBuffers(1, &IBO);
-	glDeleteProgram(program);
 
 	//Destroy window and resources
 	glfwDestroyWindow(window);
