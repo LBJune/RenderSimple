@@ -1,8 +1,9 @@
 # RenderSimple
-Cmake搭建一个GLFW+GLAD的OpenGL渲染环境，支持Windows和Mac。运行结果是一个红色的窗口。
+PBO的性能对比，对比立即模式、PBO和双缓冲PBO的纹理写入和读取的性能，包括CPU和GPU。
 
 ## 环境
-**Cmake ：** 3.25以上 
+**Cmake3.25以上**  
+**OpenGL4.5或OpenGLES3.2**
 
 ## 使用
 **Windows**
@@ -11,8 +12,6 @@ Cmake搭建一个GLFW+GLAD的OpenGL渲染环境，支持Windows和Mac。运行�
     cd /projectPath
     cmake -B ./build
 ```
-**MAC**
-```
-    cd /projectPath
-    cmake -B ./build -G Xcode
-```
+
+## 测试结果
+待补充

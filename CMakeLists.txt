@@ -17,5 +17,29 @@ FetchContent_Declare(glad
                     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/glad)
 FetchContent_MakeAvailable(glad)
 
+FetchContent_Populate(
+  stb
+  GIT_REPOSITORY https://github.com/nothings/stb.git
+  GIT_TAG master
+  SOURCE_DIR  ${CMAKE_CURRENT_SOURCE_DIR}/lib/stbimage
+)
+
+target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/stbimage)
+
 target_link_libraries(app PRIVATE glfw glad)
+
+set(BIN_PATH "${CMAKE_CURRENT_BINARY_DIR}/bin")
+set_target_properties(app PROPERTIES
+	RUNTIME_OUTPUT_DIRECTORY "${BIN_PATH}"
+	RUNTIME_OUTPUT_DIRECTORY_DEBUG "${BIN_PATH}"
+	RUNTIME_OUTPUT_DIRECTORY_RELEASE "${BIN_PATH}"
+	RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO  "${BIN_PATH}"
+	RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL  "${BIN_PATH}"
+)
+
+set(IMAGE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/image)
+file(GLOB SHADER_FILES ${IMAGE_DIR}/*)
+
+# 将 shader 文件拷贝到可执行路径
+file(COPY ${SHADER_FILES} DESTINATION "${BIN_PATH}/image")
 
