@@ -11,11 +11,7 @@ FetchContent_Declare(glfw
                     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/glfw)
 FetchContent_MakeAvailable(glfw)
 
-FetchContent_Declare(glad
-                    GIT_REPOSITORY https://github.com/skaarj1989/glad.git
-                    GIT_TAG gl
-                    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/glad)
-FetchContent_MakeAvailable(glad)
+find_package(Vulkan REQUIRED)
+target_include_directories(app PRIVATE Vulkan::Vulkan)
 
-target_link_libraries(app PRIVATE glfw glad)
-
+target_link_libraries(app PRIVATE glfw Vulkan::Vulkan)
