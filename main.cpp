@@ -5,6 +5,7 @@
 #include <sstream>
 #include <vector>
 #include <optional>
+#include <set>
 
 GLFWwindow* pWindow = NULL;
 //窗口标题
@@ -15,6 +16,9 @@ VkInstance instance = VK_NULL_HANDLE;
 VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 VkDevice device;
 VkQueue graphicsQueue;
+VkQueue presentQueue;
+
+VkSurfaceKHR surface;
 
 //VK_LAYER_NV_optimus：NVIDIA 提供的优化层，主要是用于识别基于 Vulkan 等的游戏，并切换为独立 GPU 来提供更好的性能。
 //VK_LAYER_OBS_HOOK：用于支持 Open Broadcaster Software(OBS 等游戏直播、录屏软件的接口)。
@@ -125,6 +129,12 @@ void setupDebugMessenger() {
 	}
 }
 
+void createSurface() {
+	if (glfwCreateWindowSurface(instance, pWindow, nullptr, &surface) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create window surface!");
+	}
+}
+
 void checValidationExtensionSupport()
 {
 	uint32_t extensionCount = 0;
@@ -232,9 +242,10 @@ void createInstance() {
 
 struct QueueFamilyIndices {
 	std::optional<uint32_t> graphicsFamily;
+	std::optional<uint32_t> presentFamily;
 
 	bool isComplete() {
-		return graphicsFamily.has_value();
+		return graphicsFamily.has_value() && presentFamily.has_value();
 	}
 };
 
@@ -258,6 +269,13 @@ QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
 		//VK_QUEUE_PROTECTED_BIT 队列支持受保护操作(受保护的命令在执行时，其数据和操作对应用的其余部分是不可访问的，包括CPU以及其他的GPU执行单元)。可用于保护敏感数据，防止它们被未授权的应用访问，特别在如视频流解码等场景中，需要确保解码数据在应用中的其余部分是不可见的
 		if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
 			indices.graphicsFamily = i;
+		}
+
+		VkBool32 presentSupport = false;
+		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+
+		if (presentSupport) {
+			indices.presentFamily = i;
 		}
 
 		if (indices.isComplete()) {
@@ -309,21 +327,27 @@ void pickPhysicalDevice() {
 void createLogicalDevice() {
 	QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
 
-	VkDeviceQueueCreateInfo queueCreateInfo{};
-	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
-	queueCreateInfo.queueCount = 1;
-
-	//这是一个指向浮点数数组的指针，用于设定一组设备队列的优先级。这些优先级被用于在系统中的多个并行队列中调度命令的执行。指定的优先级必须在0.0到1.0之间，包括0.0和1.0。其中，1.0是最高优先级。
+	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+	std::set<uint32_t> uniqueQueueFamilies = {
+		   indices.graphicsFamily.value(),
+		   indices.presentFamily.value()
+	};
 	float queuePriority = 1.0f;
-	queueCreateInfo.pQueuePriorities = &queuePriority;
+	for (uint32_t queueFamily : uniqueQueueFamilies) {
+		VkDeviceQueueCreateInfo queueCreateInfo{};
+		queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queueCreateInfo.queueFamilyIndex = queueFamily;
+		queueCreateInfo.queueCount = 1;
+		queueCreateInfo.pQueuePriorities = &queuePriority;//这是一个指向浮点数数组的指针，用于设定一组设备队列的优先级。这些优先级被用于在系统中的多个并行队列中调度命令的执行。指定的优先级必须在0.0到1.0之间，包括0.0和1.0。其中，1.0是最高优先级。
+		queueCreateInfos.push_back(queueCreateInfo);
+	}
 
 	VkPhysicalDeviceFeatures deviceFeatures{};
 
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	createInfo.pQueueCreateInfos = &queueCreateInfo;
-	createInfo.queueCreateInfoCount = 1;
+	createInfo.pQueueCreateInfos = queueCreateInfos.data();
+	createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
 	createInfo.pEnabledFeatures = &deviceFeatures;
 
 	createInfo.enabledExtensionCount = 0;
@@ -341,6 +365,7 @@ void createLogicalDevice() {
 	}
 
 	vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
+	vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
 }
 
 //Vulkan实例、物理设备和逻辑设备：
@@ -363,6 +388,7 @@ void createLogicalDevice() {
 void initVulkan() {
 	createInstance();//创建Vulkan实例
 	setupDebugMessenger(); //设置Vulkan调试信息回调的函数
+	createSurface();	//创建窗口surface
 	pickPhysicalDevice();//选择物理设备(GPU)
 	createLogicalDevice();//创建逻辑设备（通过创建一个逻辑设备，应用程序可以与物理设备进行交互，例如提交渲染和计算任务）
 
