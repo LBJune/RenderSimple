@@ -6,6 +6,7 @@
 #include <vector>
 #include <optional>
 #include <set>
+#include <algorithm>
 
 GLFWwindow* pWindow = NULL;
 //窗口标题
@@ -19,6 +20,12 @@ VkQueue graphicsQueue;
 VkQueue presentQueue;
 
 VkSurfaceKHR surface;
+VkSwapchainKHR swapChain;
+std::vector<VkImage> swapChainImages;
+VkFormat swapChainImageFormat;
+VkExtent2D swapChainExtent;
+
+std::vector<VkImageView> swapChainImageViews;
 
 //VK_LAYER_NV_optimus：NVIDIA 提供的优化层，主要是用于识别基于 Vulkan 等的游戏，并切换为独立 GPU 来提供更好的性能。
 //VK_LAYER_OBS_HOOK：用于支持 Open Broadcaster Software(OBS 等游戏直播、录屏软件的接口)。
@@ -36,6 +43,10 @@ VkSurfaceKHR surface;
 //VK_LAYER_LUNARG_crash_diagnostic：用于在程序崩溃时生成诊断报告。
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_KHRONOS_validation"
+};
+
+const std::vector<const char*> deviceExtensions = {
+	VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
 //Vulkan API提供的错误检查功能非常有限,需要显式地定义每一个操作，用于开发者更好地理解 Vulkan API 调用的行为，意味着在开发阶段可以启用校验层进行详尽的错误检测和性能建议，在发布阶段则可以禁用，以避免额外的性能开销
@@ -240,6 +251,7 @@ void createInstance() {
 	}
 }
 
+
 struct QueueFamilyIndices {
 	std::optional<uint32_t> graphicsFamily;
 	std::optional<uint32_t> presentFamily;
@@ -288,6 +300,24 @@ QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
 	return indices;
 }
 
+
+bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
+
+	uint32_t extensionCount;
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+
+	std::vector<VkExtensionProperties> availableExtensions(extensionCount);
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+	std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
+
+	for (const auto& extension : availableExtensions) {
+		requiredExtensions.erase(extension.extensionName);
+	}
+
+	return requiredExtensions.empty();
+}
+
 //选择符合要求的设备
 bool isDeviceSuitable(VkPhysicalDevice device) {
 	//VkPhysicalDeviceProperties deviceProperties;
@@ -298,7 +328,15 @@ bool isDeviceSuitable(VkPhysicalDevice device) {
 
 	QueueFamilyIndices indices = findQueueFamilies(device);
 
-	return indices.isComplete();
+	bool extensionsSupported = checkDeviceExtensionSupport(device);
+
+	bool swapChainAdequate = false;
+	if (extensionsSupported) {
+		SwapChainSupportDetails swapChainSupport = querySwapChainSupport(device);
+		swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
+	}
+
+	return indices.isComplete() && extensionsSupported && swapChainAdequate;
 
 }
 
@@ -350,7 +388,8 @@ void createLogicalDevice() {
 	createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
 	createInfo.pEnabledFeatures = &deviceFeatures;
 
-	createInfo.enabledExtensionCount = 0;
+	createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+	createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
 	if (enableValidationLayers) {
 		createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
@@ -366,6 +405,166 @@ void createLogicalDevice() {
 
 	vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
 	vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
+}
+
+
+struct SwapChainSupportDetails {
+	VkSurfaceCapabilitiesKHR capabilities;
+	std::vector<VkSurfaceFormatKHR> formats;
+	std::vector<VkPresentModeKHR> presentModes;
+};
+
+//
+VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
+	for (const auto& availableFormat : availableFormats) {
+		if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+			return availableFormat;
+		}
+	}
+
+	return availableFormats[0];
+}
+
+//VK_PRESENT_MODE_IMMEDIATE_KHR			应用程序提交的图像会立即传输到屏幕上，这可能会导致画面撕裂。
+//VK_PRESENT_MODE_FIFO_KHR				FIFO（First In First Out），交换链是个队列，当队列满了，程序就会停下来。这与现代屏幕的垂直同步最接近，可以避免撕裂。
+//VK_PRESENT_MODE_FIFO_RELAXED_KHR		只有当帧在下一次垂直刷新之前完成更新，才进行帧刷新。如果帧晚了，那么就直接交换，可能会导致撕裂。和FIFO的区别在于尚未完成渲染的帧的处理。FIFO是会延用旧画面，而FIFO_RELAXED会先使用旧画面，当新帧完成后，会立即交换，这样会出现撕裂。
+//VK_PRESENT_MODE_MAILBOX_KHR			这是第二种模式的另一种变体。队列已满时，应用程序不会阻塞，而是用较新的图像替换已排队的图像。此模式可用于尽可能快地渲染帧，同时仍避免撕裂，从而比标准垂直同步减少延迟问题。这通常称为“三重缓冲”，尽管仅存在三个缓冲区并不一定意味着帧速率已解锁。
+VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) {
+	for (const auto& availablePresentMode : availablePresentModes) {
+		if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+			return availablePresentMode;
+		}
+	}
+
+	return VK_PRESENT_MODE_FIFO_KHR;
+}
+
+VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
+	if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
+		return capabilities.currentExtent;
+	}
+	else {
+		int width, height;
+		glfwGetFramebufferSize(pWindow, &width, &height);
+
+		VkExtent2D actualExtent = {
+			static_cast<uint32_t>(width),
+			static_cast<uint32_t>(height)
+		};
+
+		actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+		actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+
+		return actualExtent;
+	}
+}
+
+SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device) {
+	SwapChainSupportDetails details;
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);	//查询给定sueface在物理设备上的基本能力，如尺寸、图像数量、图像数组大小
+
+	uint32_t formatCount;
+	vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);	//查询给定sueface支持的格式数量，
+
+	if (formatCount != 0) {
+		details.formats.resize(formatCount);
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data()); //查询给定sueface支持的格式
+	}
+
+	uint32_t presentModeCount;
+	vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);	//查询给定的物理设备到surface的有效呈现模式
+
+	if (presentModeCount != 0) {
+		details.presentModes.resize(presentModeCount);
+		vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.data());	//查询给定的物理设备到surface的有效呈现模式
+	}
+	return details;
+}
+
+void createSwapChain() {
+	SwapChainSupportDetails swapChainSupport = querySwapChainSupport(physicalDevice);
+
+	VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
+	VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
+	VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
+
+	uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
+	if (swapChainSupport.capabilities.maxImageCount > 0 && imageCount > swapChainSupport.capabilities.maxImageCount) {
+		imageCount = swapChainSupport.capabilities.maxImageCount;
+	}
+
+	//设置交换链的属性
+	VkSwapchainCreateInfoKHR createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	createInfo.surface = surface;
+
+	createInfo.minImageCount = imageCount;
+	createInfo.imageFormat = surfaceFormat.format;
+	createInfo.imageColorSpace = surfaceFormat.colorSpace;
+	createInfo.imageExtent = extent;
+	createInfo.imageArrayLayers = 1;
+	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+	QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+	uint32_t queueFamilyIndices[] = { indices.graphicsFamily.value(), indices.presentFamily.value() };
+
+	if (indices.graphicsFamily != indices.presentFamily) {
+		createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;	//VK_SHARING_MODE_CONCURRENT：图像可以在多个队列系列中使用，而无需明确转让所有权。
+		createInfo.queueFamilyIndexCount = 2;
+		createInfo.pQueueFamilyIndices = queueFamilyIndices;	//使用VK_SHARING_MODE_CONCURRENT需要指定要使用的队列家族的数目和列表
+	}
+	else {
+		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;//VK_SHARING_MODE_EXCLUSIVE：一个图像一次只能由一个队列系列拥有，在另一个队列系列中使用它之前必须明确转让所有权。此选项提供最佳性能。
+	}
+
+	createInfo.preTransform = swapChainSupport.capabilities.currentTransform;
+	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;	//不透明，忽略alpha
+	createInfo.presentMode = presentMode;
+	createInfo.clipped = VK_TRUE;
+
+	createInfo.oldSwapchain = VK_NULL_HANDLE;
+
+	if (vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create swap chain!");
+	}
+
+	vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
+	swapChainImages.resize(imageCount);
+	vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImages.data());
+
+	swapChainImageFormat = surfaceFormat.format;
+	swapChainExtent = extent;
+}
+
+
+void createImageViews() {
+	swapChainImageViews.resize(swapChainImages.size());
+
+	for (size_t i = 0; i < swapChainImages.size(); i++) {
+		VkImageViewCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		createInfo.image = swapChainImages[i];
+
+		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;	//指定图像视图类型为 1D 纹理、2D 纹理、3D 纹理和立方体贴图
+		createInfo.format = swapChainImageFormat;
+
+		//为每个颜色通道（R，G，B，A）重新映射颜色值
+		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;	//不改变该通道（默认）
+		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+		//subresourceRange成员变量用于指定图像的用途和图像的哪一部分可以被访问
+		createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;	//确定图像视图是色彩图像、深度模板等还是都包括
+		createInfo.subresourceRange.baseMipLevel = 0;	//指定访问的mipmap层次的范围开始（base）和个数（count）
+		createInfo.subresourceRange.levelCount = 1;
+		createInfo.subresourceRange.baseArrayLayer = 0;	//指定访问的数组层的范围开始（base）和个数（count）
+		createInfo.subresourceRange.layerCount = 1;
+
+		if (vkCreateImageView(device, &createInfo, nullptr, &swapChainImageViews[i]) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create image views!");
+		}
+	}
 }
 
 //Vulkan实例、物理设备和逻辑设备：
@@ -391,7 +590,25 @@ void initVulkan() {
 	createSurface();	//创建窗口surface
 	pickPhysicalDevice();//选择物理设备(GPU)
 	createLogicalDevice();//创建逻辑设备（通过创建一个逻辑设备，应用程序可以与物理设备进行交互，例如提交渲染和计算任务）
+	createSwapChain();	//创建交换链，将图像呈现到屏幕
+	createImageViews();	//创建图像视图
+}
 
+void cleanupVulkan()
+{
+	for (auto imageView : swapChainImageViews) {
+		vkDestroyImageView(device, imageView, nullptr);
+	}
+
+	vkDestroySwapchainKHR(device, swapChain, nullptr);
+	vkDestroyDevice(device, nullptr);
+
+	if (enableValidationLayers) {
+		DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+	}
+
+	vkDestroySurfaceKHR(instance, surface, nullptr);
+	vkDestroyInstance(instance, nullptr);
 }
 
 int main()
@@ -415,13 +632,7 @@ int main()
 		TitleFps();
 	}
 
-	if (enableValidationLayers) {
-		DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
-	}
-
-	vkDestroyDevice(device, nullptr);
-
-	vkDestroyInstance(instance, nullptr);
+	cleanupVulkan();
 
 	glfwDestroyWindow(pWindow);
 
