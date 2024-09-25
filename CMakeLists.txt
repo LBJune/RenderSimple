@@ -19,3 +19,18 @@ find_package(Vulkan REQUIRED)
 target_include_directories(app PRIVATE Vulkan::Vulkan)
 
 target_link_libraries(app PRIVATE glfw Vulkan::Vulkan)
+
+set(BIN_PATH "${CMAKE_CURRENT_BINARY_DIR}/bin")
+set_target_properties(app PROPERTIES
+	RUNTIME_OUTPUT_DIRECTORY "${BIN_PATH}"
+	RUNTIME_OUTPUT_DIRECTORY_DEBUG "${BIN_PATH}"
+	RUNTIME_OUTPUT_DIRECTORY_RELEASE "${BIN_PATH}"
+	RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO  "${BIN_PATH}"
+	RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL  "${BIN_PATH}"
+)
+
+set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shader)
+file(GLOB SHADER_FILES ${SHADER_DIR}/*)
+
+# 将 shader 文件拷贝到可执行路径
+file(COPY ${SHADER_FILES} DESTINATION "${BIN_PATH}/shader")
