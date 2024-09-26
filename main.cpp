@@ -53,6 +53,8 @@ std::vector<VkFence> inFlightFences;
 const int MAX_FRAMES_IN_FLIGHT = 2;
 uint32_t currentFrame = 0;
 
+bool framebufferResized = false;
+
 //VK_LAYER_NV_optimus：NVIDIA 提供的优化层，主要是用于识别基于 Vulkan 等的游戏，并切换为独立 GPU 来提供更好的性能。
 //VK_LAYER_OBS_HOOK：用于支持 Open Broadcaster Software(OBS 等游戏直播、录屏软件的接口)。
 //VK_LAYER_RENDERDOC_Capture：RenderDoc 提供的抓帧功能层，可以在特定的时刻捕获渲染的帧状态，用于之后的离线分析。
@@ -126,6 +128,10 @@ std::string getExeDirectory() {
 	GetModuleFileNameA(nullptr, path, MAX_PATH);
 	std::string exePath = path;
 	return exePath.substr(0, exePath.find_last_of("\\/"));
+}
+
+static void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
+	framebufferResized = true;
 }
 
 //调试信息的回调，参考原型 PFN_vkDebugUtilsMessengerCallbackEXT
@@ -955,12 +961,50 @@ void createSyncObjects() {
 
 }
 
+void cleanupSwapChain() {
+	for (size_t i = 0; i < swapChainFramebuffers.size(); i++) {
+		vkDestroyFramebuffer(device, swapChainFramebuffers[i], nullptr);
+	}
+
+	for (size_t i = 0; i < swapChainImageViews.size(); i++) {
+		vkDestroyImageView(device, swapChainImageViews[i], nullptr);
+	}
+
+	vkDestroySwapchainKHR(device, swapChain, nullptr);
+}
+
+void recreateSwapChain() {	
+	//最小化窗口
+	int width = 0, height = 0;
+	glfwGetFramebufferSize(pWindow, &width, &height);
+	while (width == 0 || height == 0) {
+		glfwGetFramebufferSize(pWindow, &width, &height);
+		glfwWaitEvents();
+	}
+
+	vkDeviceWaitIdle(device);
+
+	cleanupSwapChain();
+
+	createSwapChain();
+	createImageViews();
+	createFramebuffers();
+}
+
 void drawFrame() {
 	vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX);	//等待缓冲区指令完成
-	vkResetFences(device, 1, &inFlightFences[currentFrame]);	//此函数用于重置一个或多个Fence对象的状态为未信号
 
 	uint32_t imageIndex;
-	vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);	//从交换链中获取下面渲染所需要的图像，获取成功会发送imageAvailableSemaphore的信号量
+	VkResult result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);	//从交换链中获取下面渲染所需要的图像，获取成功会发送imageAvailableSemaphore的信号量
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+		recreateSwapChain();
+		return;
+	}
+	else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+		throw std::runtime_error("failed to acquire swap chain image!");
+	}
+	vkResetFences(device, 1, &inFlightFences[currentFrame]);	//此函数用于重置一个或多个Fence对象的状态为未信号
 
 	vkResetCommandBuffer(commandBuffers[currentFrame], /*VkCommandBufferResetFlagBits*/ 0);
 	recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
@@ -999,7 +1043,16 @@ void drawFrame() {
 	presentInfo.pImageIndices = &imageIndex;
 
 	//返回渲染后的图像到交换链进行呈现操作
-	vkQueuePresentKHR(presentQueue, &presentInfo);
+	result = vkQueuePresentKHR(presentQueue, &presentInfo);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
+		framebufferResized = false;
+		recreateSwapChain();
+	}
+	else if (result != VK_SUCCESS) {
+		throw std::runtime_error("failed to present swap chain image!");
+	}
+
 
 	currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
@@ -1039,6 +1092,8 @@ void initVulkan() {
 
 void cleanupVulkan()
 {
+	cleanupSwapChain();
+
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
 		vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
@@ -1048,19 +1103,10 @@ void cleanupVulkan()
 
 	vkDestroyCommandPool(device, commandPool, nullptr);
 
-	for (auto framebuffer : swapChainFramebuffers) {
-		vkDestroyFramebuffer(device, framebuffer, nullptr);
-	}
-
 	vkDestroyPipeline(device, graphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 	vkDestroyRenderPass(device, renderPass, nullptr);
 
-	for (auto imageView : swapChainImageViews) {
-		vkDestroyImageView(device, imageView, nullptr);
-	}
-
-	vkDestroySwapchainKHR(device, swapChain, nullptr);
 	vkDestroyDevice(device, nullptr);
 
 	if (enableValidationLayers) {
@@ -1077,8 +1123,9 @@ int main()
 
 	//GLFW_CLIENT_API的默认设置是GLFW_OPENGL_API，这种情况下，GLFW会在创建窗口时创建OpenGL的上下文，这对于Vulkan而言是多余的，所以向GLFW说明不需要OpenGL的API。
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);		//禁止窗口缩放
+	//glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);		//禁止窗口缩放
 	pWindow = glfwCreateWindow(1280, 720, windowTitle, nullptr, nullptr);
+	glfwSetFramebufferSizeCallback(pWindow, framebufferResizeCallback);
 
 	initVulkan();
 
