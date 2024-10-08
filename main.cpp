@@ -58,6 +58,8 @@ bool framebufferResized = false;
 
 VkBuffer vertexBuffer;
 VkDeviceMemory vertexBufferMemory;
+VkBuffer indexBuffer;
+VkDeviceMemory indexBufferMemory;
 
 //VK_LAYER_NV_optimus：NVIDIA 提供的优化层，主要是用于识别基于 Vulkan 等的游戏，并切换为独立 GPU 来提供更好的性能。
 //VK_LAYER_OBS_HOOK：用于支持 Open Broadcaster Software(OBS 等游戏直播、录屏软件的接口)。
@@ -682,12 +684,18 @@ VkShaderModule createShaderModule(const std::vector<char>& code) {
 	return shaderModule;
 }
 
-
-float vertices[] =
+std::vector<float> vertices =
 {
-	-0.5f, -0.5f, 1.0f, 0.0f, 0.0f,
-	 0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
-	0.0f,  0.5f,  0.0f, 0.0f, 1.0f,
+	//---位置---//  //---颜色---//
+	-0.5f, -0.5f,  1.0f, 0.0f, 0.0f,	//左上	与opengl在y轴上相反
+	 0.5f, -0.5f,  0.0f, 1.0f, 0.0f,	//右上
+	-0.5f,  0.5f,  0.0f, 0.0f, 1.0f,	//左下
+	 0.5f,  0.5f,  1.0f, 1.0f, 1.0f,	//右下
+};
+
+std::vector <int16_t> indices = {
+	0, 1, 2, // 第一个三角形
+	1, 3, 2  // 第二个三角形
 };
 
 uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
@@ -763,7 +771,7 @@ void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
 }
 
 void createVertexBuffer() {
-	VkDeviceSize bufferSize = sizeof(float) * 15;
+	VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
 	VkBuffer stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
@@ -771,12 +779,32 @@ void createVertexBuffer() {
 
 	void* data;
 	vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-	memcpy(data, vertices, (size_t)bufferSize);
+	memcpy(data, vertices.data(), (size_t)bufferSize);
 	vkUnmapMemory(device, stagingBufferMemory);
 
 	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
 
 	copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+
+	vkDestroyBuffer(device, stagingBuffer, nullptr);
+	vkFreeMemory(device, stagingBufferMemory, nullptr);
+}
+
+void createIndexBuffer() {
+	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+	void* data;
+	vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+	memcpy(data, indices.data(), (size_t)bufferSize);
+	vkUnmapMemory(device, stagingBufferMemory);
+
+	createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferMemory);
+
+	copyBuffer(stagingBuffer, indexBuffer, bufferSize);
 
 	vkDestroyBuffer(device, stagingBuffer, nullptr);
 	vkFreeMemory(device, stagingBufferMemory, nullptr);
@@ -820,7 +848,7 @@ void createGraphicsPipeline() {
 	attributeDescriptions[1].binding = 0;
 	attributeDescriptions[1].location = 1;
 	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-	attributeDescriptions[1].offset = 2*sizeof(float);
+	attributeDescriptions[1].offset = 2 * sizeof(float);
 
 	//VkVertexInputAttributeDescription attributeDescription = {};
 	//attributeDescription.binding = 0;
@@ -1052,11 +1080,13 @@ void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
 		VkDeviceSize offsets[] = { 0 };
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
+		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
 		// vertexCount：尽管这里我们没有使用顶点缓冲，但仍然需要指定三个顶点用于三角形的绘制。 
 		// instanceCount：用于实例渲染，为1时表示不进行实例渲染。 
 		// firstVertex：用于定义着色器变量gl_VertexIndex的值。 
 		// firstInstance：用于定义着色器变量gl_InstanceIndex的值
-		vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+		vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -1218,6 +1248,7 @@ void initVulkan() {
 	createFramebuffers(); //创建帧缓冲区
 	createCommandPool();	//创建命令池
 	createVertexBuffer();
+	createIndexBuffer();
 	createCommandBuffer();	//创建命令缓冲区
 	createSyncObjects();	//创建同步对象
 }
@@ -1228,6 +1259,9 @@ void cleanupVulkan()
 
 	vkDestroyBuffer(device, vertexBuffer, nullptr);
 	vkFreeMemory(device, vertexBufferMemory, nullptr);
+
+	vkDestroyBuffer(device, indexBuffer, nullptr);
+	vkFreeMemory(device, indexBufferMemory, nullptr);
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
