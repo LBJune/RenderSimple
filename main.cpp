@@ -11,6 +11,7 @@
 #define NOMINMAX
 #include <windows.h>
 #include <limits>
+#include <array>
 
 
 GLFWwindow* pWindow = NULL;
@@ -684,9 +685,9 @@ VkShaderModule createShaderModule(const std::vector<char>& code) {
 
 float vertices[] =
 {
-	-0.5f, -0.5f,
-	 0.5f, -0.5f,
-	0.0f,  0.5f
+	-0.5f, -0.5f, 1.0f, 0.0f, 0.0f,
+	 0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+	0.0f,  0.5f,  0.0f, 0.0f, 1.0f,
 };
 
 uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
@@ -705,7 +706,7 @@ uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
 void createVertexBuffer() {
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferInfo.size = sizeof(float) * 6;
+	bufferInfo.size = sizeof(float) * 15;
 	bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	if (vkCreateBuffer(device, &bufferInfo, nullptr, &vertexBuffer) != VK_SUCCESS) {
@@ -733,8 +734,8 @@ void createVertexBuffer() {
 }
 
 void createGraphicsPipeline() {
-	auto vertShaderCode = readFile(getExeDirectory() + "\\shader\\vertex.spv");
-	auto fragShaderCode = readFile(getExeDirectory() + "\\shader\\fragment.spv");
+	auto vertShaderCode = readFile(getExeDirectory() + "\\shader\\vertex.vert.spv");
+	auto fragShaderCode = readFile(getExeDirectory() + "\\shader\\fragment.frag.spv");
 
 	VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
 	VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
@@ -758,22 +759,33 @@ void createGraphicsPipeline() {
 	//顶点数据赋值
 	VkVertexInputBindingDescription bindingDescription{};
 	bindingDescription.binding = 0;
-	bindingDescription.stride = 2 * sizeof(float);
+	bindingDescription.stride = 5 * sizeof(float);
 	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
-	VkVertexInputAttributeDescription attributeDescription = {};
-	attributeDescription.binding = 0;
-	attributeDescription.location = 0;
-	attributeDescription.format = VK_FORMAT_R32G32_SFLOAT;	//vec2
-	attributeDescription.offset = 0;
+	std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions{};
+	attributeDescriptions[0].binding = 0;
+	attributeDescriptions[0].location = 0;
+	attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+	attributeDescriptions[0].offset = 0;
+
+	attributeDescriptions[1].binding = 0;
+	attributeDescriptions[1].location = 1;
+	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+	attributeDescriptions[1].offset = 2*sizeof(float);
+
+	//VkVertexInputAttributeDescription attributeDescription = {};
+	//attributeDescription.binding = 0;
+	//attributeDescription.location = 0;
+	//attributeDescription.format = VK_FORMAT_R32G32_SFLOAT;	//vec2
+	//attributeDescription.offset = 0;
 
 	//1.管线的顶点输入
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 	vertexInputInfo.vertexBindingDescriptionCount = 1;
 	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-	vertexInputInfo.vertexAttributeDescriptionCount = 1;
-	vertexInputInfo.pVertexAttributeDescriptions = &attributeDescription;
+	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 	//2.图元装配
 	//VK_PRIMITIVE_TOPOLOGY_POINT_LIST: 点
@@ -1166,6 +1178,7 @@ void cleanupVulkan()
 	cleanupSwapChain();
 
 	vkDestroyBuffer(device, vertexBuffer, nullptr);
+	vkFreeMemory(device, vertexBufferMemory, nullptr);
 
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
