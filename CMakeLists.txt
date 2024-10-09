@@ -15,10 +15,18 @@ FetchContent_Declare(glfw
                     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/glfw)
 FetchContent_MakeAvailable(glfw)
 
+FetchContent_Declare(glm
+                    GIT_REPOSITORY https://github.com/g-truc/glm.git
+                    GIT_TAG 1.0.1
+                    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/glm)
+
+FetchContent_MakeAvailable(glm)
+
+
 find_package(Vulkan REQUIRED)
 target_include_directories(app PRIVATE Vulkan::Vulkan)
 
-target_link_libraries(app PRIVATE glfw Vulkan::Vulkan)
+target_link_libraries(app PRIVATE glfw glm Vulkan::Vulkan)
 
 set(BIN_PATH "${CMAKE_CURRENT_BINARY_DIR}/bin")
 set_target_properties(app PROPERTIES
