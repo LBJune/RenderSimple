@@ -22,6 +22,14 @@ FetchContent_Declare(glm
 
 FetchContent_MakeAvailable(glm)
 
+FetchContent_Populate(
+  stb
+  GIT_REPOSITORY https://github.com/nothings/stb.git
+  GIT_TAG master
+  SOURCE_DIR  ${CMAKE_CURRENT_SOURCE_DIR}/lib/stbimage
+)
+
+target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/lib/stbimage)
 
 find_package(Vulkan REQUIRED)
 target_include_directories(app PRIVATE Vulkan::Vulkan)
@@ -42,3 +50,9 @@ file(GLOB SHADER_FILES ${SHADER_DIR}/*)
 
 # 将 shader 文件拷贝到可执行路径
 file(COPY ${SHADER_FILES} DESTINATION "${BIN_PATH}/shader")
+
+set(IMAGE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/image)
+file(GLOB IMAGE_FILES ${IMAGE_DIR}/*)
+
+# 将 image 文件拷贝到可执行路径
+file(COPY ${IMAGE_FILES} DESTINATION "${BIN_PATH}/image")

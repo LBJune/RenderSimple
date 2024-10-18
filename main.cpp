@@ -18,6 +18,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 
 GLFWwindow* pWindow = NULL;
 //窗口标题
@@ -73,6 +76,9 @@ std::vector<VkDescriptorSet> descriptorSets;
 std::vector<VkBuffer> uniformBuffers;
 std::vector<VkDeviceMemory> uniformBuffersMemory;
 std::vector<void*> uniformBuffersMapped;
+
+VkImage textureImage;
+VkDeviceMemory textureImageMemory;
 
 //VK_LAYER_NV_optimus：NVIDIA 提供的优化层，主要是用于识别基于 Vulkan 等的游戏，并切换为独立 GPU 来提供更好的性能。
 //VK_LAYER_OBS_HOOK：用于支持 Open Broadcaster Software(OBS 等游戏直播、录屏软件的接口)。
@@ -843,6 +849,70 @@ void createUniformBuffers() {
     }
 }
 
+void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory) {
+
+	VkImageCreateInfo imageInfo{};
+	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageInfo.imageType = VK_IMAGE_TYPE_2D;	//图像类型（1D，2D或3D）
+	imageInfo.extent.width = width;
+	imageInfo.extent.height = height;
+	imageInfo.extent.depth = 1;
+	imageInfo.mipLevels = 1;
+	imageInfo.arrayLayers = 1;
+	imageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;	//规定像素如何在内存中排列，可选包括 VK_IMAGE_TILING_LINEAR 和 VK_IMAGE_TILING_OPTIMAL，即线性排序和优化排序
+	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;	//初始化布局，VK_IMAGE_LAYOUT_UNDEFINED：通常用于新创建的图像，因为此时我们通常不关心图像的现有内容
+	imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+	//VK_SHARING_MODE_EXCLUSIVE: 在任何给定时间，资源只能在一个队列家族中使用。如果资源需要在多个队列家族中使用，必须显式执行所有权传递。这种模式在性能上可能更优，因为允许进行某些硬件优化。
+	//VK_SHARING_MODE_CONCURRENT: 在多个队列家族之间共享资源，不需要明确的所有权传递。如果你在多个队列之间频繁共享资源，可能会希望使用这种模式。
+	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageInfo.flags = 0; // Optional	图像创建标识，如立方体贴图(VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT)、3D等，参考枚举VkImageCreateFlagBits	 
+
+	if (vkCreateImage(device, &imageInfo, nullptr, &textureImage) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create image!");
+	}
+
+	VkMemoryRequirements memRequirements;
+	vkGetImageMemoryRequirements(device, textureImage, &memRequirements);
+
+	VkMemoryAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memRequirements.size;
+	allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+	if (vkAllocateMemory(device, &allocInfo, nullptr, &textureImageMemory) != VK_SUCCESS) {
+		throw std::runtime_error("failed to allocate image memory!");
+	}
+
+	vkBindImageMemory(device, textureImage, textureImageMemory, 0);
+}
+
+void createTextureImage() {
+	std::string path = getExeDirectory() + "\\image\\picture.png";
+	//stbi_set_flip_vertically_on_load(true);
+
+	int texWidth, texHeight, texChannels;
+	stbi_uc* pixels = stbi_load(path.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+	VkDeviceSize imageSize = texWidth * texHeight * 4;
+
+	if (!pixels) {
+		throw std::runtime_error("failed to load texture image!");
+	}
+
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+
+	createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+	void* data;
+	vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+	memcpy(data, pixels, static_cast<size_t>(imageSize));
+	vkUnmapMemory(device, stagingBufferMemory);
+
+	stbi_image_free(pixels);
+
+}
+
 //在 Vulkan 中，描述符集（`VkDescriptorSet`）是一个向着色器程序提供输入（如：缓冲器，图像等）的方式。它具体地指定了每个描述符引用的资源（比如：缓冲区，图像等）在 GPU 内存中的细节。可以把一个描述符集看作是一组GPU资源的引用集合。
 //
 //在着色器中，描述符通常以变量的形式和一个特定的绑定点一起使用，允许在渲染过程中在 GPU 内存中访问数据。描述符通过描述符布局（`VkDescriptorSetLayout`）和描述符池（`VkDescriptorPool`）来管理。
@@ -921,7 +991,6 @@ void createDescriptorSets() {
 
 		vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
 	}
-
 }
 
 void createGraphicsPipeline() {
@@ -1379,6 +1448,7 @@ void initVulkan() {
 	createGraphicsPipeline(); //创建渲染管线
 	createFramebuffers(); //创建帧缓冲区
 	createCommandPool();	//创建命令池
+	createTextureImage();
 	createVertexBuffer();
 	createIndexBuffer();
 	createUniformBuffers();
