@@ -5,9 +5,10 @@
 #include <utils/log.h>
 #include <utils/error.h>
 
-#ifdef _DEBUG
-#	define USE_VALIDATION_LAYERS
-#endif
+static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
+	LOGD( "validation layer: %s", pCallbackData->pMessage);
+	return VK_FALSE;
+}
 
 namespace vkit
 {
@@ -40,18 +41,114 @@ namespace vkit
 		return false;
 	}
 
+	bool checkValidationLayerSupport(const std::vector<const char*>& required, const std::vector<VkLayerProperties>& available) 
+	{
+        for (const char* layerName : required) {
+            bool layerFound = false;
+
+            for (const auto& layerProperties : available) {
+                if (strcmp(layerName, layerProperties.layerName) == 0) {
+                    layerFound = true;
+                    break;
+                }
+            }
+
+            if (!layerFound) {
+				LOGE("Validation Layer %s not found", layerName);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+	std::vector<const char*> get_optimal_validation_layers(const std::vector<VkLayerProperties>& supported_instance_layers)
+	{
+		std::vector<std::vector<const char*>> validation_layer_priority_list =
+		{
+			// The preferred validation layer is "VK_LAYER_KHRONOS_validation"
+			{"VK_LAYER_KHRONOS_validation"},
+
+			// Otherwise we fallback to using the LunarG meta layer
+			{"VK_LAYER_LUNARG_standard_validation"},
+
+			// Otherwise we attempt to enable the individual layers that compose the LunarG meta layer since it doesn't exist
+			{
+				"VK_LAYER_GOOGLE_threading",
+				"VK_LAYER_LUNARG_parameter_validation",
+				"VK_LAYER_LUNARG_object_tracker",
+				"VK_LAYER_LUNARG_core_validation",
+				"VK_LAYER_GOOGLE_unique_objects",
+			},
+
+			// Otherwise as a last resort we fallback to attempting to enable the LunarG core layer
+			{"VK_LAYER_LUNARG_core_validation"} };
+
+		for (auto& validation_layers : validation_layer_priority_list)
+		{
+			if (checkValidationLayerSupport(validation_layers, supported_instance_layers))
+			{
+				return validation_layers;
+			}
+
+			LOGW("Couldn't enable validation layers (see log for error) - falling back");
+		}
+
+		// Else return nothing
+		return {};
+	}
+
+	void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
+		createInfo = {};
+		createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+		createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+		createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+		createInfo.pfnUserCallback = debugCallback;
+	}
+
+	VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
+		auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+		if (func != nullptr) {
+			return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+		}
+		else {
+			return VK_ERROR_EXTENSION_NOT_PRESENT;
+		}
+	}
+
+	void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
+		auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+		if (func != nullptr) {
+			func(instance, debugMessenger, pAllocator);
+		}
+	}
+
 	Instance::Instance(const std::string&			application_name,
 		const std::vector<const char*>&				required_extensions,
 		const std::vector<const char*>&				required_validation_layers,
 		uint32_t                                    api_version)
 	{
+		uint32_t instance_layer_count;
+		VK_CHECK(vkEnumerateInstanceLayerProperties(&instance_layer_count, nullptr));
+
+		std::vector<VkLayerProperties> supported_validation_layers(instance_layer_count);
+		VK_CHECK(vkEnumerateInstanceLayerProperties(&instance_layer_count, supported_validation_layers.data()));
+
+		if (!checkValidationLayerSupport(required_validation_layers, supported_validation_layers)) {
+			throw std::runtime_error("validation layers requested, but not available!");
+		}
+
 		uint32_t instance_extension_count = 0;
 		vkEnumerateInstanceExtensionProperties(nullptr, &instance_extension_count, nullptr);
 		std::vector<VkExtensionProperties> available_instance_extensions(instance_extension_count);
 		vkEnumerateInstanceExtensionProperties(nullptr, &instance_extension_count, available_instance_extensions.data());
 
+		std::vector<const char*> requested_validation_layers(required_validation_layers);
+
 #ifdef USE_VALIDATION_LAYERS
 		enable_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, available_instance_extensions, enabled_extensions);
+		std::vector<const char*> optimal_validation_layers = get_optimal_validation_layers(supported_validation_layers);
+		requested_validation_layers.insert(requested_validation_layers.end(), optimal_validation_layers.begin(), optimal_validation_layers.end());
 #endif
 
 		for (auto extension : required_extensions)
@@ -71,14 +168,25 @@ namespace vkit
 		createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 		createInfo.pApplicationInfo = &appInfo;
 
-		createInfo.enabledExtensionCount = enabled_extensions.size();
+		createInfo.enabledExtensionCount = static_cast<uint32_t>(enabled_extensions.size());
 		createInfo.ppEnabledExtensionNames = enabled_extensions.data();
 
-		createInfo.enabledLayerCount = 0;
+		createInfo.enabledLayerCount = static_cast<uint32_t>(requested_validation_layers.size());
+		createInfo.ppEnabledLayerNames = requested_validation_layers.data();
+
+#ifdef USE_VALIDATION_LAYERS
+		////Debugging instance creation and destruction
+		//VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
+		//populateDebugMessengerCreateInfo(debugCreateInfo);
+		//createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
+#endif
 
 		if (vkCreateInstance(&createInfo, nullptr, &handle) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create instance!");
 		}
+#ifdef USE_VALIDATION_LAYERS
+		setupDebugMessenger();
+#endif
 	}
 
 	Instance::Instance(VkInstance instance) :
@@ -89,6 +197,11 @@ namespace vkit
 
 	Instance::~Instance()
 	{
+		if (debug_utils_messenger != VK_NULL_HANDLE)
+		{
+			DestroyDebugUtilsMessengerEXT(handle, debug_utils_messenger, nullptr);
+		}
+
 		if (handle != VK_NULL_HANDLE)
 		{
 			vkDestroyInstance(handle, nullptr);
@@ -103,5 +216,15 @@ namespace vkit
 	const std::vector<const char*>& Instance::get_extensions()
 	{
 		return enabled_extensions;
+	}
+
+	void Instance::setupDebugMessenger()
+	{
+		VkDebugUtilsMessengerCreateInfoEXT createInfo;
+		populateDebugMessengerCreateInfo(createInfo);
+
+		if (CreateDebugUtilsMessengerEXT(handle, &createInfo, nullptr, &debug_utils_messenger) != VK_SUCCESS) {
+			throw std::runtime_error("failed to set up debug messenger!");
+		}
 	}
 }        // namespace vkit

@@ -7,6 +7,11 @@
 #include <unordered_map>
 #include <memory>
 
+#ifdef _DEBUG
+#	define USE_VALIDATION_LAYERS
+#endif
+
+
 namespace vkit
 {
 	/**
@@ -50,5 +55,14 @@ namespace vkit
 		 * @brief The enabled extensions
 		 */
 		std::vector<const char*> enabled_extensions;
+
+		void setupDebugMessenger();
+
+#if defined(USE_VALIDATION_LAYERS)
+		/**
+		 * @brief Debug utils messenger callback for VK_EXT_Debug_Utils
+		 */
+		VkDebugUtilsMessengerEXT debug_utils_messenger{ VK_NULL_HANDLE };
+#endif
 	};
 }        // namespace vkit
