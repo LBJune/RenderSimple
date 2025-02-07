@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.12.0)
 
-project(RenderSimple VERSION 1.0.0)
-
-add_executable(app main.cpp)
+project(VKit VERSION 1.0.0)
 
 include(FetchContent)
 FetchContent_Declare(glfw
@@ -11,7 +9,5 @@ FetchContent_Declare(glfw
                     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/glfw)
 FetchContent_MakeAvailable(glfw)
 
-find_package(Vulkan REQUIRED)
-target_include_directories(app PRIVATE Vulkan::Vulkan)
-
-target_link_libraries(app PRIVATE glfw Vulkan::Vulkan)
+add_subdirectory(vkit)
+add_subdirectory(samples/hello_triangle)
