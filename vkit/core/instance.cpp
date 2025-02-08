@@ -1,4 +1,5 @@
 #include "instance.h"
+#include "physical_device.h"
 
 #include <algorithm>
 #include <functional>
@@ -185,14 +186,22 @@ namespace vkit
 			throw std::runtime_error("failed to create instance!");
 		}
 #ifdef USE_VALIDATION_LAYERS
-		setupDebugMessenger();
+		setup_debug_essenger();
 #endif
+		query_gpus();
 	}
 
 	Instance::Instance(VkInstance instance) :
 		handle{ instance }
 	{
-		
+		if (handle != VK_NULL_HANDLE)
+		{
+			query_gpus();
+		}
+		else
+		{
+			throw std::runtime_error("Instance not valid");
+		}
 	}
 
 	Instance::~Instance()
@@ -218,7 +227,7 @@ namespace vkit
 		return enabled_extensions;
 	}
 
-	void Instance::setupDebugMessenger()
+	void Instance::setup_debug_essenger()
 	{
 		VkDebugUtilsMessengerCreateInfoEXT createInfo;
 		populateDebugMessengerCreateInfo(createInfo);
@@ -226,5 +235,72 @@ namespace vkit
 		if (CreateDebugUtilsMessengerEXT(handle, &createInfo, nullptr, &debug_utils_messenger) != VK_SUCCESS) {
 			throw std::runtime_error("failed to set up debug messenger!");
 		}
+	}
+
+	void Instance::query_gpus()
+	{
+		// Querying valid physical devices on the machine
+		uint32_t physical_device_count{ 0 };
+		VK_CHECK(vkEnumeratePhysicalDevices(handle, &physical_device_count, nullptr));
+
+		if (physical_device_count < 1)
+		{
+			throw std::runtime_error("Couldn't find a physical device that supports Vulkan.");
+		}
+
+		std::vector<VkPhysicalDevice> physical_devices;
+		physical_devices.resize(physical_device_count);
+		VK_CHECK(vkEnumeratePhysicalDevices(handle, &physical_device_count, physical_devices.data()));
+
+		// Create gpus wrapper objects from the VkPhysicalDevice's
+		for (auto& physical_device : physical_devices)
+		{
+			gpus.push_back(std::make_unique<PhysicalDevice>(*this, physical_device));
+		}
+	}
+
+	PhysicalDevice& Instance::pick_physical_device()
+	{
+		assert(!gpus.empty() && "No physical devices were found on the system.");
+
+		// Find a discrete GPU
+		for (auto& gpu : gpus)
+		{
+			if (gpu->get_properties().deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+			{
+				return *gpu;
+			}
+		}
+
+		// Otherwise just pick the first one
+		LOGW("Couldn't find a discrete physical device, picking default GPU");
+		return *gpus[0];
+
+	}
+
+	PhysicalDevice& Instance::get_suitable_gpu()
+	{
+		assert(!gpus.empty() && "No physical devices were found on the system.");
+
+		// Find a discrete GPU
+		for (auto& gpu : gpus)
+		{
+			if (gpu->get_properties().deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+			{
+				std::vector<VkQueueFamilyProperties> queueFamilies = gpu->get_queue_family_properties();
+				int i = 0;
+				for (const auto& queueFamily : queueFamilies) {
+					if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+						selected_gpu_index = i;
+						return *gpu;
+					}
+					++i;
+				}
+			}
+		}
+
+		// Otherwise just pick the first one
+		LOGW("Couldn't find a discrete physical device, picking default GPU");
+		return *gpus[0];
 	}
 }        // namespace vkit

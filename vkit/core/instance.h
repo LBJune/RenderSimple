@@ -14,6 +14,7 @@
 
 namespace vkit
 {
+	class PhysicalDevice;
 	/**
 	 * @brief A wrapper class for VkInstance
 	 */
@@ -45,6 +46,15 @@ namespace vkit
 
 		const std::vector<const char*>& get_extensions();
 
+		PhysicalDevice& pick_physical_device();
+
+		PhysicalDevice& get_suitable_gpu();
+
+		/**
+		 * @brief Can be set from the GPU selection plugin to explicitly select a GPU instead
+		 */
+		std::optional<uint32_t> selected_gpu_index;
+
 	private:
 		/**
 		 * @brief The Vulkan instance
@@ -56,7 +66,17 @@ namespace vkit
 		 */
 		std::vector<const char*> enabled_extensions;
 
-		void setupDebugMessenger();
+		void setup_debug_essenger();
+
+		/**
+		 * @brief Queries the instance for the physical devices on the machine
+		 */
+		void query_gpus();
+
+		/**
+		 * @brief The physical devices found on the machine
+		 */
+		std::vector<std::unique_ptr<PhysicalDevice>> gpus;
 
 #if defined(USE_VALIDATION_LAYERS)
 		/**
