@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <core/instance.h>
 #include <core/physical_device.h>
+#include <core/device.h>
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -25,7 +26,7 @@ private:
 	const char* windowTitle = "Hello Triangle";
 
 	std::shared_ptr<vkit::Instance> instance;
-	
+	std::shared_ptr<vkit::Device> device;
 
 	void initWindow() {
 		glfwInit();
@@ -39,7 +40,8 @@ private:
 
 	void initVulkan() {
 		instance = std::shared_ptr<vkit::Instance>(new vkit::Instance(windowTitle, getRequiredExtensions()));
-		VkPhysicalDevice physicalDevice = instance->get_suitable_gpu().get_handle();
+		vkit::PhysicalDevice *physicalDevice = &(instance->get_suitable_gpu());
+		device = std::shared_ptr<vkit::Device>(new vkit::Device(*physicalDevice));
 	}
 
 	void mainLoop() {
