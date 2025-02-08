@@ -27,6 +27,7 @@ private:
 
 	std::shared_ptr<vkit::Instance> instance;
 	std::shared_ptr<vkit::Device> device;
+	VkSurfaceKHR surface;
 
 	void initWindow() {
 		glfwInit();
@@ -40,8 +41,9 @@ private:
 
 	void initVulkan() {
 		instance = std::shared_ptr<vkit::Instance>(new vkit::Instance(windowTitle, getRequiredExtensions()));
-		vkit::PhysicalDevice *physicalDevice = &(instance->get_suitable_gpu());
-		device = std::shared_ptr<vkit::Device>(new vkit::Device(*physicalDevice));
+		createSurface();
+		//vkit::PhysicalDevice *physicalDevice = &(instance->get_suitable_gpu());
+		device = std::shared_ptr<vkit::Device>(new vkit::Device(instance->get_suitable_gpu(surface), surface));
 	}
 
 	void mainLoop() {
@@ -51,11 +53,16 @@ private:
 	}
 
 	void cleanup() {
+		vkDestroySurfaceKHR(instance->get_handle(), surface, nullptr);
+		device.reset();
+		instance.reset();
+
 		glfwDestroyWindow(window);
 
 		glfwTerminate();
 	}
 
+	//调用需要的扩展，否则surface会创建失败
 	std::vector<const char*> getRequiredExtensions() {
 		uint32_t glfwExtensionCount = 0;
 		const char** glfwExtensions;
@@ -64,6 +71,12 @@ private:
 		std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
 		return extensions;
+	}
+
+	void createSurface() {
+		if (glfwCreateWindowSurface(instance->get_handle(), window, nullptr, &surface) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create window surface!");
+		}
 	}
 };
 

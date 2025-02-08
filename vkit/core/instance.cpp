@@ -278,7 +278,7 @@ namespace vkit
 
 	}
 
-	PhysicalDevice& Instance::get_suitable_gpu()
+	PhysicalDevice& Instance::get_suitable_gpu(VkSurfaceKHR surface)
 	{
 		assert(!gpus.empty() && "No physical devices were found on the system.");
 
@@ -287,14 +287,15 @@ namespace vkit
 		{
 			if (gpu->get_properties().deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
 			{
-				std::vector<VkQueueFamilyProperties> queueFamilies = gpu->get_queue_family_properties();
-				int i = 0;
-				for (const auto& queueFamily : queueFamilies) {
-					if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-						selected_gpu_index = i;
+				// See if it work with the surface
+				size_t queue_count = gpu->get_queue_family_properties().size();
+				for (uint32_t queue_idx = 0; static_cast<size_t>(queue_idx) < queue_count; queue_idx++)
+				{
+					if (gpu->is_present_supported(surface, queue_idx))
+					{
+						selected_gpu_index = queue_idx;
 						return *gpu;
 					}
-					++i;
 				}
 			}
 		}

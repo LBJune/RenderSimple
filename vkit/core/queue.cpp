@@ -30,6 +30,11 @@ namespace vkit
 		other.index = 0;
 	}
 
+	Queue::~Queue()
+	{
+
+	}
+
 	const Device& Queue::get_device() const
 	{
 		return device;

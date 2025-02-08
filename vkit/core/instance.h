@@ -47,7 +47,7 @@ namespace vkit
 
 		PhysicalDevice& pick_physical_device();
 
-		PhysicalDevice& get_suitable_gpu();
+		PhysicalDevice& get_suitable_gpu(VkSurfaceKHR surface);
 
 		/**
 		 * @brief Can be set from the GPU selection plugin to explicitly select a GPU instead

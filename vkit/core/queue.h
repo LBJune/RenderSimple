@@ -20,6 +20,8 @@ namespace vkit
 
 		Queue& operator=(Queue&&) = delete;
 
+		~Queue();
+
 		const Device& get_device() const;
 
 		VkQueue get_handle() const;

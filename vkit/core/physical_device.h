@@ -38,6 +38,28 @@ class PhysicalDevice
 
 	const std::vector<VkQueueFamilyProperties>& get_queue_family_properties() const;
 
+	VkBool32 is_present_supported(VkSurfaceKHR surface, uint32_t queue_family_index) const;
+
+	/**
+	 * @brief Sets whether or not the first graphics queue should have higher priority than other queues.
+	 * Very specific feature which is used by async compute samples.
+	 * @param enable If true, present queue will have prio 1.0 and other queues have prio 0.5.
+	 * Default state is false, where all queues have 0.5 priority.
+	*/
+	void set_high_priority_graphics_queue_enable(bool enable)
+	{
+		high_priority_graphics_queue = enable;
+	}
+
+	/**
+	 * @brief Returns high priority graphics queue state.
+	 * @return High priority state.
+	 */
+	bool has_high_priority_graphics_queue() const
+	{
+		return high_priority_graphics_queue;
+	}
+
   private:
 	// Handle to the Vulkan instance
 	Instance& instance;
@@ -56,6 +78,8 @@ class PhysicalDevice
 
 	// The GPU queue family properties
 	std::vector<VkQueueFamilyProperties> queue_family_properties;
+
+	bool high_priority_graphics_queue{};
 };
 
 }        // namespace vkit

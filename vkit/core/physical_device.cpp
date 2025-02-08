@@ -72,4 +72,16 @@ namespace vkit
 	{
 		return queue_family_properties;
 	}
+
+	VkBool32 PhysicalDevice::is_present_supported(VkSurfaceKHR surface, uint32_t queue_family_index) const
+	{
+		VkBool32 present_supported{ VK_FALSE };
+
+		if (surface != VK_NULL_HANDLE)
+		{
+			VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(handle, queue_family_index, surface, &present_supported));
+		}
+
+		return present_supported;
+	}
 }        // namespace vkit
