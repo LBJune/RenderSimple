@@ -36,6 +36,21 @@ namespace vkit
 		vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_properties_count, nullptr);
 		queue_family_properties = std::vector<VkQueueFamilyProperties>(queue_family_properties_count);
 		vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_properties_count, queue_family_properties.data());
+
+		uint32_t device_extension_count;
+		VK_CHECK(vkEnumerateDeviceExtensionProperties(get_handle(), nullptr, &device_extension_count, nullptr));
+		device_extensions = std::vector<VkExtensionProperties>(device_extension_count);
+		VK_CHECK(vkEnumerateDeviceExtensionProperties(get_handle(), nullptr, &device_extension_count, device_extensions.data()));
+
+		// Display supported extensions
+		if (device_extensions.size() > 0)
+		{
+			LOGD("Device supports the following extensions:");
+			for (auto& extension : device_extensions)
+			{
+				LOGD("  \t%s", extension.extensionName);
+			}
+		}
 	}
 
 	PhysicalDevice::~PhysicalDevice()
@@ -83,5 +98,13 @@ namespace vkit
 		}
 
 		return present_supported;
+	}
+
+	bool PhysicalDevice::is_extension_supported(const char * requested_extension) const
+	{
+		return std::find_if(device_extensions.begin(), device_extensions.end(),
+			[requested_extension](auto& device_extension) {
+				return std::strcmp(device_extension.extensionName, requested_extension) == 0;
+			}) != device_extensions.end();
 	}
 }        // namespace vkit

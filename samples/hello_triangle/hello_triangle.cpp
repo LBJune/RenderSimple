@@ -7,6 +7,7 @@
 #include <core/instance.h>
 #include <core/physical_device.h>
 #include <core/device.h>
+#include <core/swapchain.h>
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -28,6 +29,11 @@ private:
 	std::shared_ptr<vkit::Instance> instance;
 	std::shared_ptr<vkit::Device> device;
 	VkSurfaceKHR surface;
+	std::shared_ptr<vkit::Swapchain> swapchain;
+
+	const std::vector<const char*> deviceExtensions = {
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME
+	};
 
 	void initWindow() {
 		glfwInit();
@@ -43,7 +49,8 @@ private:
 		instance = std::shared_ptr<vkit::Instance>(new vkit::Instance(windowTitle, getRequiredExtensions()));
 		createSurface();
 		//vkit::PhysicalDevice *physicalDevice = &(instance->get_suitable_gpu());
-		device = std::shared_ptr<vkit::Device>(new vkit::Device(instance->get_suitable_gpu(surface), surface));
+		device = std::shared_ptr<vkit::Device>(new vkit::Device(instance->get_suitable_gpu(surface), surface, deviceExtensions));
+		swapchain = std::shared_ptr<vkit::Swapchain>(new vkit::Swapchain(*device.get(), surface));
 	}
 
 	void mainLoop() {
@@ -54,6 +61,7 @@ private:
 
 	void cleanup() {
 		vkDestroySurfaceKHR(instance->get_handle(), surface, nullptr);
+		swapchain.reset();
 		device.reset();
 		instance.reset();
 

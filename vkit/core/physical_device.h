@@ -40,6 +40,8 @@ class PhysicalDevice
 
 	VkBool32 is_present_supported(VkSurfaceKHR surface, uint32_t queue_family_index) const;
 
+	bool is_extension_supported(const char * extension) const;
+
 	/**
 	 * @brief Sets whether or not the first graphics queue should have higher priority than other queues.
 	 * Very specific feature which is used by async compute samples.
@@ -78,6 +80,9 @@ class PhysicalDevice
 
 	// The GPU queue family properties
 	std::vector<VkQueueFamilyProperties> queue_family_properties;
+
+	// The extensions that this GPU supports
+	std::vector<VkExtensionProperties> device_extensions;
 
 	bool high_priority_graphics_queue{};
 };

@@ -1,6 +1,6 @@
 #include "error.h"
 
-namespace vkr
+namespace vkit
 {
 VulkanException::VulkanException(const VkResult result, const std::string &msg) :
     result{result},
@@ -13,4 +13,4 @@ const char *VulkanException::what() const noexcept
 {
 	return error_message.c_str();
 }
-}        // namespace vkr
+}        // namespace vkit

@@ -7,7 +7,7 @@
 #include <vulkan/vulkan_core.h>
 #include "log.h"
 
-namespace vkr
+namespace vkit
 {
 /**
  * @brief Vulkan exception structure
@@ -31,7 +31,7 @@ class VulkanException : public std::runtime_error
   private:
 	std::string error_message;
 };
-}        // namespace vkr
+}        // namespace vkit
 
 /// @brief Helper macro to test the result of Vulkan calls which can return an error.
 #define VK_CHECK(x)                                                                    \

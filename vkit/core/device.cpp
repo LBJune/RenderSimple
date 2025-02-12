@@ -9,11 +9,13 @@
 namespace vkit
 {
 
-	Device::Device(PhysicalDevice& physical_device,
-		VkSurfaceKHR               surface) :
+	Device::Device(PhysicalDevice&	physical_device,
+		VkSurfaceKHR				surface,
+		std::vector<const char*>	requested_extensions) :
 		gpu{ physical_device }
 	{
 		LOGI("Selected GPU: %s", gpu.get_properties().deviceName);
+
 
 		// Prepare the device queues
 		uint32_t                             queue_family_properties_count = static_cast<uint32_t>(gpu.get_queue_family_properties().size());
@@ -53,17 +55,32 @@ namespace vkit
 			queue_create_info.pQueuePriorities = queue_priorities[queue_family_index].data();
 		}
 
+		for (auto& extension : requested_extensions)
+		{
+			if (is_extension_supported(extension))
+			{
+				enabled_extensions.emplace_back(extension);
+
+				LOGI("Required device extension %s is available", extension);
+			}
+			else
+			{
+				LOGE("Required device extension %s not available, cannot run", extension);
+			}
+		}
+
 		VkPhysicalDeviceFeatures deviceFeatures{};
 
 		VkDeviceCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 
-		createInfo.pQueueCreateInfos = queue_create_infos.data();
 		createInfo.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
+		createInfo.pQueueCreateInfos = queue_create_infos.data();
+
+		createInfo.enabledExtensionCount = static_cast<uint32_t>(enabled_extensions.size());
+		createInfo.ppEnabledExtensionNames = enabled_extensions.data();
 
 		createInfo.pEnabledFeatures = &deviceFeatures;
-
-		createInfo.enabledExtensionCount = 0;
 
 		if (vkCreateDevice(gpu.get_handle(), &createInfo, nullptr, &handle) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create logical device!");
@@ -82,8 +99,6 @@ namespace vkit
 				queues[queue_family_index].emplace_back(*this, queue_family_index, queue_family_property, present_supported, queue_index);
 			}
 		}
-
-	
 	}
 
 	Device::~Device()
@@ -148,6 +163,11 @@ namespace vkit
 		}
 
 		throw std::runtime_error("Could not find a matching queue family index");
+	}
+
+	bool Device::is_extension_supported(const char* requested_extension) const
+	{
+		return gpu.is_extension_supported(requested_extension);
 	}
 
 }        // namespace vkit
