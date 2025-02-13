@@ -66,8 +66,6 @@ namespace vkit
 
 		Swapchain(const Swapchain&) = delete;
 
-		Swapchain(Swapchain&& other);
-
 		~Swapchain();
 
 		Swapchain& operator=(const Swapchain&) = delete;

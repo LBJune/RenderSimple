@@ -8,6 +8,8 @@
 #include <core/physical_device.h>
 #include <core/device.h>
 #include <core/swapchain.h>
+#include <core/image.h>
+#include <core/image_view.h>
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -30,6 +32,8 @@ private:
 	std::shared_ptr<vkit::Device> device;
 	VkSurfaceKHR surface;
 	std::shared_ptr<vkit::Swapchain> swapchain;
+	std::vector<vkit::Image*> images;
+	std::vector<vkit::ImageView*> imageviews;
 
 	const std::vector<const char*> deviceExtensions = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
@@ -48,9 +52,15 @@ private:
 	void initVulkan() {
 		instance = std::shared_ptr<vkit::Instance>(new vkit::Instance(windowTitle, getRequiredExtensions()));
 		createSurface();
-		//vkit::PhysicalDevice *physicalDevice = &(instance->get_suitable_gpu());
 		device = std::shared_ptr<vkit::Device>(new vkit::Device(instance->get_suitable_gpu(surface), surface, deviceExtensions));
 		swapchain = std::shared_ptr<vkit::Swapchain>(new vkit::Swapchain(*device.get(), surface));
+		std::vector<VkImage> imgs = swapchain->get_images();
+		for (auto image : imgs)
+		{
+			vkit::Image* newImage = new vkit::Image(*device.get(), image, VkExtent3D{ swapchain->get_extent().width, swapchain->get_extent().height, 1 }, swapchain->get_format(), swapchain->get_usage());
+			images.push_back(newImage);
+			imageviews.push_back(new vkit::ImageView(*newImage, VK_IMAGE_VIEW_TYPE_2D));
+		}
 	}
 
 	void mainLoop() {
@@ -60,8 +70,17 @@ private:
 	}
 
 	void cleanup() {
-		vkDestroySurfaceKHR(instance->get_handle(), surface, nullptr);
+		for (auto imageview : imageviews)
+		{
+			delete imageview;
+		}
+
+		for (auto image : images)
+		{
+			delete image;
+		}
 		swapchain.reset();
+		vkDestroySurfaceKHR(instance->get_handle(), surface, nullptr);
 		device.reset();
 		instance.reset();
 

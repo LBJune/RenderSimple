@@ -1,4 +1,4 @@
-#include "error.h"
+#include "strings.h"
 
 namespace vkit
 {
@@ -952,15 +952,16 @@ namespace vkit
 
 	const std::string to_string(VkFrontFace face)
 	{
-		if (face == VK_FRONT_FACE_COUNTER_CLOCKWISE)
+		switch (face)
 		{
-			return "VK_FRONT_FACE_COUNTER_CLOCKWISE";
+			case VK_FRONT_FACE_COUNTER_CLOCKWISE:
+				return "VK_FRONT_FACE_COUNTER_CLOCKWISE";
+			case VK_FRONT_FACE_CLOCKWISE:
+				return "VK_FRONT_FACE_CLOCKWISE";
+			default:
+				"UNKNOWN.";
 		}
-		if (face == VK_FRONT_FACE_CLOCKWISE)
-		{
-			return "VK_FRONT_FACE_CLOCKWISE";
-		}
-		return "UNKOWN";
+		return "UNKNOWN";
 	}
 
 	const std::string to_string(VkPolygonMode mode)

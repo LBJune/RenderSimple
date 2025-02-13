@@ -1,6 +1,6 @@
 #pragma once
 #include <vulkan/vulkan.h>
-#include "log.h"
+#include <string>
 
 namespace vkit
 {
