@@ -1,7 +1,34 @@
 #include "strings.h"
+#include <sstream>
 
 namespace vkit
 {
+	std::vector<std::string> split(const std::string& str, const std::string& delimiter)
+	{
+		if (str.size() == 0)
+		{
+			return {};
+		}
+
+		std::vector<std::string> out;
+
+		std::string buffer = str;
+		size_t      last_found_pos = 0;
+		size_t      pos = 0;
+		while ((pos = buffer.find(delimiter)) != std::string::npos)
+		{
+			out.push_back(buffer.substr(0, pos));
+			buffer.erase(0, pos + delimiter.length());
+			last_found_pos = last_found_pos + pos + delimiter.length();
+		}
+
+		if (last_found_pos == str.size())
+		{
+			out.push_back("");
+		}
+
+		return out;
+	}
 
 	const std::string to_string(VkFormat format)
 	{
@@ -1396,4 +1423,17 @@ namespace vkit
 		return "false";
 	}
 
+	std::vector<std::string> split(const std::string& input, char delim)
+	{
+		std::vector<std::string> tokens;
+
+		std::stringstream sstream(input);
+		std::string       token;
+		while (std::getline(sstream, token, delim))
+		{
+			tokens.push_back(token);
+		}
+
+		return tokens;
+	}
 }        // namespace vkit

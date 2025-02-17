@@ -1,10 +1,11 @@
 #pragma once
 #include <vulkan/vulkan.h>
 #include <string>
+#include <vector>
 
 namespace vkit
 {
-
+	std::vector<std::string> split(const std::string& str, const std::string& delimiter);
 	/**
 	 * @brief Helper function to convert a VkFormat enum to a string
 	 * @param format Vulkan format to convert.
@@ -166,4 +167,11 @@ namespace vkit
 	 */
 	const std::string to_string(bool flag);
 
+	/**
+	 * @brief Helper function to split a single string into a vector of strings by a delimiter
+	 * @param input The input string to be split
+	 * @param delim The character to delimit by
+	 * @return The vector of tokenized strings
+	 */
+	std::vector<std::string> split(const std::string& input, char delim);
 }        // namespace vkit

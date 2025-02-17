@@ -28,9 +28,33 @@ source_group("utils" FILES ${UTILS_SOURCES})
 add_library(VKit ${CORE_SOURCES} ${UTILS_SOURCES})
 
 find_package(Vulkan REQUIRED)
-target_link_libraries(VKit PRIVATE Vulkan::Vulkan)
 
-target_include_directories(VKit PRIVATE Vulkan::Vulkan)
+include(FetchContent)
+FetchContent_Declare(spirv_cross
+                    GIT_REPOSITORY https://github.com/KhronosGroup/SPIRV-Cross.git
+                    GIT_TAG vulkan-sdk-1.4.304
+                    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/spirv_cross)
+set(SPIRV_CROSS_ENABLE_TESTS OFF CACHE BOOL "Disable tests")
+set(SPIRV_CROSS_CLI OFF CACHE BOOL "Disable CLI")
+
+FetchContent_Declare(glslang
+                    GIT_REPOSITORY https://github.com/KhronosGroup/glslang.git
+                    GIT_TAG vulkan-sdk-1.4.304
+                    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lib/glslang)
+set(BUILD_EXTERNAL OFF CACHE BOOL "Disable OSS-Fuzz")
+set(ENABLE_OPT OFF CACHE BOOL "Disable optimizer")
+
+FetchContent_MakeAvailable(spirv_cross glslang)
+
+target_link_libraries(VKit
+    PRIVATE 
+    Vulkan::Vulkan 
+    glslang::glslang  # GLSL编译器
+    glslang::SPIRV       # SPIR-V生成
+    spirv-cross-glsl
+)
+
+target_include_directories(VKit PRIVATE Vulkan::Vulkan  ${spirv_cross_SOURCE_DIR} ${glslang_SOURCE_DIR})
 
 # 设置库的头文件目录
 target_include_directories(VKit PUBLIC 
