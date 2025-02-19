@@ -50,6 +50,7 @@ target_link_libraries(VKit
     PRIVATE 
     Vulkan::Vulkan 
     glslang::glslang  # GLSL±àÒëÆ÷
+    glslang::glslang-default-resource-limits
     glslang::SPIRV       # SPIR-VÉú³É
     spirv-cross-glsl
 )

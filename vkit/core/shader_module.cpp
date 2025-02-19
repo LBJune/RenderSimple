@@ -95,8 +95,8 @@ namespace vkit
 
 		if (!glsl_compiler.compile_to_spirv(stage, convert_to_bytes(glsl_final_source), entry_point, shader_variant, spirv, info_log))
 		{
-			LOGE("Shader compilation failed for shader \"{}\"", glsl_source.get_filename());
-			LOGE("{}", info_log);
+			LOGE("Shader compilation failed for shader \"%s\"", glsl_source.get_filename().c_str());
+			LOGE("%s", info_log.c_str());
 			throw VulkanException{ VK_ERROR_INITIALIZATION_FAILED };
 		}
 
@@ -113,8 +113,8 @@ namespace vkit
 		id = hasher(std::string{ reinterpret_cast<const char*>(spirv.data()),
 								reinterpret_cast<const char*>(spirv.data() + spirv.size()) });
 
-		create_info.codeSize = glsl_source.get_source().size();
-		create_info.pCode = reinterpret_cast<const uint32_t*>(glsl_source.get_source().data());
+		create_info.codeSize = spirv.size() * sizeof(uint32_t);
+		create_info.pCode = spirv.data();
 
 		if (vkCreateShaderModule(device.get_handle(), &create_info, nullptr, &handle) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create shader module!");
@@ -123,7 +123,7 @@ namespace vkit
 
 	ShaderModule::ShaderModule(ShaderModule&& other) :
 		device{ other.device },
-		handle{ other.get_handle()},
+		handle{ other.get_handle() },
 		id{ other.id },
 		stage{ other.stage },
 		entry_point{ other.entry_point },
@@ -149,6 +149,157 @@ namespace vkit
 		return handle;
 	}
 
+	size_t ShaderModule::get_id() const
+	{
+		return id;
+	}
+
+	VkShaderStageFlagBits ShaderModule::get_stage() const
+	{
+		return stage;
+	}
+
+	const std::string& ShaderModule::get_entry_point() const
+	{
+		return entry_point;
+	}
+
+	const std::vector<ShaderResource>& ShaderModule::get_resources() const
+	{
+		return resources;
+	}
+
+	const std::string& ShaderModule::get_info_log() const
+	{
+		return info_log;
+	}
+
+	const std::vector<uint32_t>& ShaderModule::get_binary() const
+	{
+		return spirv;
+	}
+
+	void ShaderModule::set_resource_mode(const std::string& resource_name, const ShaderResourceMode& resource_mode)
+	{
+		auto it = std::find_if(resources.begin(), resources.end(), [&resource_name](const ShaderResource& resource) { return resource.name == resource_name; });
+
+		if (it != resources.end())
+		{
+			if (resource_mode == ShaderResourceMode::Dynamic)
+			{
+				if (it->type == ShaderResourceType::BufferUniform || it->type == ShaderResourceType::BufferStorage)
+				{
+					it->mode = resource_mode;
+				}
+				else
+				{
+					LOGW("Resource `%s` does not support dynamic.", resource_name.c_str());
+				}
+			}
+			else
+			{
+				it->mode = resource_mode;
+			}
+		}
+		else
+		{
+			LOGW("Resource `%s` not found for shader.", resource_name.c_str());
+		}
+	}
+
+
+	ShaderVariant::ShaderVariant(std::string&& preamble, std::vector<std::string>&& processes) :
+		preamble{ std::move(preamble) },
+		processes{ std::move(processes) }
+	{
+		update_id();
+	}
+
+	size_t ShaderVariant::get_id() const
+	{
+		return id;
+	}
+
+	void ShaderVariant::add_definitions(const std::vector<std::string>& definitions)
+	{
+		for (auto& definition : definitions)
+		{
+			add_define(definition);
+		}
+	}
+
+	void ShaderVariant::add_define(const std::string& def)
+	{
+		processes.push_back("D" + def);
+
+		std::string tmp_def = def;
+
+		// The "=" needs to turn into a space
+		size_t pos_equal = tmp_def.find_first_of("=");
+		if (pos_equal != std::string::npos)
+		{
+			tmp_def[pos_equal] = ' ';
+		}
+
+		preamble.append("#define " + tmp_def + "\n");
+
+		update_id();
+	}
+
+	void ShaderVariant::add_undefine(const std::string& undef)
+	{
+		processes.push_back("U" + undef);
+
+		preamble.append("#undef " + undef + "\n");
+
+		update_id();
+	}
+
+	void ShaderVariant::add_runtime_array_size(const std::string& runtime_array_name, size_t size)
+	{
+		if (runtime_array_sizes.find(runtime_array_name) == runtime_array_sizes.end())
+		{
+			runtime_array_sizes.insert({ runtime_array_name, size });
+		}
+		else
+		{
+			runtime_array_sizes[runtime_array_name] = size;
+		}
+	}
+
+	void ShaderVariant::set_runtime_array_sizes(const std::unordered_map<std::string, size_t>& sizes)
+	{
+		this->runtime_array_sizes = sizes;
+	}
+
+	const std::string& ShaderVariant::get_preamble() const
+	{
+		return preamble;
+	}
+
+	const std::vector<std::string>& ShaderVariant::get_processes() const
+	{
+		return processes;
+	}
+
+	const std::unordered_map<std::string, size_t>& ShaderVariant::get_runtime_array_sizes() const
+	{
+		return runtime_array_sizes;
+	}
+
+	void ShaderVariant::clear()
+	{
+		preamble.clear();
+		processes.clear();
+		runtime_array_sizes.clear();
+		update_id();
+	}
+
+	void ShaderVariant::update_id()
+	{
+		std::hash<std::string> hasher{};
+		id = hasher(preamble);
+	}
 
 	ShaderSource::ShaderSource(const std::string& filename) :
 		filename{ filename }

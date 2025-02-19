@@ -4,12 +4,16 @@
 #include <iostream>
 #include <stdexcept>
 #include <cstdlib>
+#define NOMINMAX
+#include <windows.h>
+
 #include <core/instance.h>
 #include <core/physical_device.h>
 #include <core/device.h>
 #include <core/swapchain.h>
 #include <core/image.h>
 #include <core/image_view.h>
+#include <core/shader_module.h>
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -30,10 +34,14 @@ private:
 
 	std::shared_ptr<vkit::Instance> instance;
 	std::shared_ptr<vkit::Device> device;
+
 	VkSurfaceKHR surface;
 	std::shared_ptr<vkit::Swapchain> swapchain;
 	std::vector<vkit::Image*> images;
 	std::vector<vkit::ImageView*> imageviews;
+
+	std::vector<vkit::ShaderModule *> shader_modules;
+
 
 	const std::vector<const char*> deviceExtensions = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
@@ -61,6 +69,9 @@ private:
 			images.push_back(newImage);
 			imageviews.push_back(new vkit::ImageView(*newImage, VK_IMAGE_VIEW_TYPE_2D));
 		}
+
+		shader_modules.push_back(new vkit::ShaderModule(*device.get(), VK_SHADER_STAGE_VERTEX_BIT, vkit::ShaderSource(getExeDirectory() + "\\shader\\shader_base.vert"), std::string("main"), {}));
+		shader_modules.push_back(new vkit::ShaderModule(*device.get(), VK_SHADER_STAGE_FRAGMENT_BIT, vkit::ShaderSource(getExeDirectory() + "\\shader\\shader_base.frag"), std::string("main"), {}));
 	}
 
 	void mainLoop() {
@@ -70,6 +81,12 @@ private:
 	}
 
 	void cleanup() {
+
+		for (auto shader_module : shader_modules)
+		{
+			delete shader_module;
+		}
+
 		for (auto imageview : imageviews)
 		{
 			delete imageview;
@@ -104,6 +121,13 @@ private:
 		if (glfwCreateWindowSurface(instance->get_handle(), window, nullptr, &surface) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create window surface!");
 		}
+	}
+
+	std::string getExeDirectory() {
+		char path[MAX_PATH];
+		GetModuleFileNameA(nullptr, path, MAX_PATH);
+		std::string exePath = path;
+		return exePath.substr(0, exePath.find_last_of("\\/"));
 	}
 };
 
