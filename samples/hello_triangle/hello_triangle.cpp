@@ -14,6 +14,7 @@
 #include <core/image.h>
 #include <core/image_view.h>
 #include <core/shader_module.h>
+#include <core/pipeline.h>
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -41,7 +42,7 @@ private:
 	std::vector<vkit::ImageView*> imageviews;
 
 	std::vector<vkit::ShaderModule *> shader_modules;
-
+	std::shared_ptr<vkit::GraphicsPipeline> pipeline;
 
 	const std::vector<const char*> deviceExtensions = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
@@ -72,6 +73,8 @@ private:
 
 		shader_modules.push_back(new vkit::ShaderModule(*device.get(), VK_SHADER_STAGE_VERTEX_BIT, vkit::ShaderSource(getExeDirectory() + "\\shader\\shader_base.vert"), std::string("main"), {}));
 		shader_modules.push_back(new vkit::ShaderModule(*device.get(), VK_SHADER_STAGE_FRAGMENT_BIT, vkit::ShaderSource(getExeDirectory() + "\\shader\\shader_base.frag"), std::string("main"), {}));
+
+		pipeline = std::shared_ptr<vkit::GraphicsPipeline>(new vkit::GraphicsPipeline(*device.get(), shader_modules));
 	}
 
 	void mainLoop() {
@@ -81,6 +84,8 @@ private:
 	}
 
 	void cleanup() {
+
+		pipeline.reset();
 
 		for (auto shader_module : shader_modules)
 		{

@@ -720,4 +720,11 @@ std::vector<VkClearValue> get_clear_value()
 }
 }        // namespace gbuffer
 
+
+Attachment::Attachment(VkFormat format, VkSampleCountFlagBits samples, VkImageUsageFlags usage) :
+	format{ format },
+	samples{ samples },
+	usage{ usage }
+{
+}
 }        // namespace vkit

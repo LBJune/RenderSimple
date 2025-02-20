@@ -170,4 +170,8 @@ namespace vkit
 		return gpu.is_extension_supported(requested_extension);
 	}
 
+	bool Device::is_enabled(const char* extension) const
+	{
+		return std::find_if(enabled_extensions.begin(), enabled_extensions.end(), [extension](const char* enabled_extension) { return strcmp(extension, enabled_extension) == 0; }) != enabled_extensions.end();
+	}
 }        // namespace vkit

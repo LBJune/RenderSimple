@@ -36,6 +36,7 @@ class Device
 
 	bool is_extension_supported(const char* extension) const;
 
+	bool is_enabled(const char* extension) const;
   private:
 	const PhysicalDevice &gpu;
 
